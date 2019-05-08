@@ -18,22 +18,28 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2001-2012 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2001-2017 Alexandre Cassen, <acassen@gmail.com>
  */
 
 #ifndef _CHECK_HTTP_H
 #define _CHECK_HTTP_H
 
 /* system includes */
-#include <stdio.h>
+#include <sys/types.h>
+#include <stdbool.h>
 #include <openssl/md5.h>
 #include <openssl/ssl.h>
+#ifdef _WITH_REGEX_CHECK_
+#define PCRE2_CODE_UNIT_WIDTH 8
+#include <pcre2.h>
+#ifdef _WITH_REGEX_TIMERS_
+#include <time.h>
+#endif
+#endif
+#include <stdbool.h>
 
 /* local includes */
-#include "check_data.h"
-#include "ipwrapper.h"
 #include "scheduler.h"
-#include "layer4.h"
 #include "list.h"
 
 /* Checker argument structure  */
@@ -43,57 +49,96 @@ typedef struct _request {
 	char				*extracted;
 	int				error;
 	int				status_code;
-	int				len;
+	size_t				len;
 	SSL				*ssl;
 	BIO				*bio;
 	MD5_CTX				context;
+	size_t				content_len;
+	size_t				rx_bytes;
+#ifdef _WITH_REGEX_CHECK_
+	bool				regex_matched;
+	size_t				start_offset;	/* Offset into buffer to match from */
+	size_t				regex_subject_offset;	/* Offset into web page of start of buffer */
+#ifdef _WITH_REGEX_TIMERS_
+	struct timespec			req_time;
+	unsigned			num_match_calls;
+#endif
+#endif
 } request_t;
 
-/* http specific thread arguments defs */
-typedef struct _http {
-	int				retry_it;	/* current number of get retry */
-	int				url_it;		/* current url checked index */
-	request_t			*req;		/* GET buffer and SSL args */
-} http_t ;
+#ifdef _WITH_REGEX_CHECK_
+typedef struct _regex {
+	unsigned char			*pattern;
+	int				pcre2_options;
+	pcre2_code			*pcre2_reCompiled;
+	pcre2_match_data		*pcre2_match_data;
+	uint32_t			pcre2_max_lookbehind;
+	unsigned			use_count;
+#ifdef _WITH_REGEX_TIMERS_
+	struct timespec			regex_time;
+	unsigned			num_match_calls;
+	unsigned			num_regex_urls;
+#endif
+} regex_t;
+#endif
 
 typedef struct _url {
 	char				*path;
-	char				*digest;
+	uint8_t				*digest;
 	int				status_code;
+	char				*virtualhost;
+	ssize_t				len_mismatch;
+#ifdef _WITH_REGEX_CHECK_
+	bool				regex_no_match;
+	regex_t				*regex;
+	size_t				regex_min_offset;
+	size_t				regex_max_offset;	/* One beyond max offset */
+#ifndef PCRE2_DONT_USE_JIT
+	bool				regex_use_stack;
+#endif
+#endif
 } url_t;
 
 typedef struct _http_checker {
-	int				proto;
-	struct sockaddr_storage		dst;
-	struct sockaddr_storage		bindto;
-	long				connection_to;
-	int				nb_get_retry;
-	long				delay_before_retry;
+	unsigned			proto;
+	unsigned			url_it;		/* current url checked index */
+	request_t			*req;		/* GET buffer and SSL args */
 	list				url;
-	http_t				*arg;
+	char				*virtualhost;
+#ifdef _HAVE_SSL_SET_TLSEXT_HOST_NAME_
+	bool				enable_sni;
+#endif
 } http_checker_t;
 
 /* global defs */
-#define MD5_BUFFER_LENGTH 32
-#define GET_BUFFER_LENGTH 2048
-#define MAX_BUFFER_LENGTH 4096
+#define GET_BUFFER_LENGTH 2048U
+#define MAX_BUFFER_LENGTH 4096U
 #define PROTO_HTTP	0x01
 #define PROTO_SSL	0x02
 
 /* GET processing command */
 #define REQUEST_TEMPLATE "GET %s HTTP/1.0\r\n" \
-                         "User-Agent:KeepAliveClient\r\n" \
-                         "Host: %s:%d\r\n\r\n"
-/* macro utility */
-#define HTTP_ARG(X) ((X)->arg)
-#define HTTP_REQ(X) ((X)->req)
+			 "User-Agent: KeepAliveClient\r\n" \
+			 "Host: %s%s\r\n\r\n"
+
+#define REQUEST_TEMPLATE_IPV6 "GET %s HTTP/1.0\r\n" \
+			 "User-Agent: KeepAliveClient\r\n" \
+			 "Host: [%s]%s\r\n\r\n"
+
+#ifdef _REGEX_DEBUG_
+extern bool do_regex_debug;
+#endif
+#ifdef _WITH_REGEX_TIMERS_
+extern bool do_regex_timers;
+#endif
 
 /* Define prototypes */
 extern void install_http_check_keyword(void);
-extern int epilog(thread_t *, int, int, int);
-extern int timeout_epilog(thread_t *, char *, char *);
-extern url_t *fetch_next_url(http_checker_t *);
-extern int http_process_response(request_t *, int);
-extern int http_handle_response(thread_t *, unsigned char digest[16]
-				, int);
+extern int timeout_epilog(thread_t *, const char *);
+extern void http_process_response(request_t *, size_t, url_t *);
+extern int http_handle_response(thread_t *, unsigned char digest[16], bool);
+#ifdef THREAD_DUMP
+extern void register_check_http_addresses(void);
+#endif
+
 #endif

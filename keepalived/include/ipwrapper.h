@@ -17,29 +17,22 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2001-2012 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2001-2017 Alexandre Cassen, <acassen@gmail.com>
  */
 
 #ifndef _IPWRAPPER_H
 #define _IPWRAPPER_H
 
 /* system includes */
-#include <syslog.h>
+#include <stdbool.h>
 
-/* locale includes */
+/* local includes */
 #include "check_data.h"
-#include "smtp.h"
-
-/* NAT netmask */
-#define HOST_NETMASK   0xffffffff
-
-/* firewall rules framework command */
-#define IP_FW_CMD_ADD 0x0001
-#define IP_FW_CMD_DEL 0x0002
+#include "check_api.h"
 
 /* UP & DOWN value */
-#define UP   1
-#define DOWN 0
+#define UP   true
+#define DOWN false
 
 /* LVS command set by kernel */
 #define LVS_CMD_ADD		IP_VS_SO_SET_ADD
@@ -49,12 +42,14 @@
 #define LVS_CMD_EDIT_DEST	IP_VS_SO_SET_EDITDEST
 
 /* prototypes */
-extern void perform_svr_state(int, virtual_server_t *, real_server_t *);
-extern void update_svr_wgt(int, virtual_server_t *, real_server_t *);
-extern int svr_checker_up(checker_id_t, real_server_t *);
-extern void update_svr_checker_state(int, checker_id_t, virtual_server_t *, real_server_t *);
-extern int init_services(void);
-extern int clear_services(void);
-extern int clear_diff_services(void);
+extern void update_svr_wgt(int, virtual_server_t *, real_server_t *, bool);
+extern void set_checker_state(checker_t *, bool);
+extern void update_svr_checker_state(bool, checker_t *);
+extern bool init_services(void);
+extern void clear_services(void);
+extern void set_quorum_states(void);
+extern void clear_diff_services(list);
+extern void check_new_rs_state(void);
+extern void link_vsg_to_vs(void);
 
 #endif

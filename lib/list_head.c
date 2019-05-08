@@ -2,14 +2,13 @@
  * Soft:        Keepalived is a failover program for the LVS project
  *              <www.linuxvirtualserver.org>. It monitor & manipulate
  *              a loadbalanced server pool using multi-layer checks.
+ *		In addition it provides a VRRPv2 & VRRPv3 stack.
  *
- * Part:        list_head. This code is comming from Linux Kernel.
+ * Author:      Alexandre Cassen, <acassen@corp.free.fr>
  *
- * Author:      Alexandre Cassen, <acassen@linux-vs.org>
- *
- *              This program is distributed in the hope that it will be useful, 
- *              but WITHOUT ANY WARRANTY; without even the implied warranty of 
- *              MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+ *              This program is distributed in the hope that it will be useful,
+ *              but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *              MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  *              See the GNU General Public License for more details.
  *
  *              This program is free software; you can redistribute it and/or
@@ -17,10 +16,12 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2001-2012 Alexandre Cassen, <acassen@linux-vs.org>
+ * Copyright (C) 2018 Alexandre Cassen, <acassen@corp.free.fr>
  */
 
 #include "list_head.h"
+#include "warnings.h"
+
 
 void list_sort(struct list_head *head,
 	       int (*cmp)(struct list_head *a, struct list_head *b))
@@ -41,7 +42,9 @@ void list_sort(struct list_head *head,
 			nmerges++;
 			q = p;
 			psize = 0;
+RELAX_STRICT_OVERFLOW_START
 			for (i = 0; i < insize; i++) {
+RELAX_STRICT_OVERFLOW_END
 				psize++;
 				q = q->next == oldhead ? NULL : q->next;
 				if (!q)

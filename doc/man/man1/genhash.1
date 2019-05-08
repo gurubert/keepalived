@@ -2,6 +2,7 @@
 .\" genhash(1)
 .\"
 .\" Copyright (C) 2004 Andres Salomon
+.\" Copyright (C) 2010-2013 Alexandre Cassen, <acassen@gmail.com>
 .TH genhash 1 "Feb 2004"
 .SH NAME
 genhash \- md5 hash generation tool for remote web pages
@@ -30,8 +31,13 @@ Specify the port to connect to.
 .B --url <url>, -u
 Specify the path to the file you want to generate the hash of.
 .TP
-.B --use-virtualhost <host>, -u
+.B --use-virtualhost <host>, -V
 Specify the virtual host to send along with the HTTP headers.
+.TP
+.B --hash <alg>, -H
+Specify the hash algorithm to make a digest of the target page.
+Consult the help screen for list of available ones with a mark
+of the default one.
 .TP
 .B --verbose, -v
 Be verbose with the output.

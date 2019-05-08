@@ -17,27 +17,47 @@
  *              as published by the Free Software Foundation; either version
  *              2 of the License, or (at your option) any later version.
  *
- * Copyright (C) 2001-2012 Alexandre Cassen, <acassen@gmail.com>
+ * Copyright (C) 2001-2017 Alexandre Cassen, <acassen@gmail.com>
  */
 
 #ifndef _CHECK_API_H
 #define _CHECK_API_H
 
+#include "config.h"
+
+/* global includes */
+#include <stdbool.h>
+#include <stdio.h>
+#include <sys/socket.h>
+
 /* local includes */
+#include "list.h"
 #include "check_data.h"
-#include "scheduler.h"
+#include "vector.h"
+#include "layer4.h"
 
 /* Checkers structure definition */
 typedef struct _checker {
 	void				(*free_func) (void *);
-	void				(*dump_func) (void *);
+	void				(*dump_func) (FILE *, void *);
 	int				(*launch) (struct _thread *);
-	int				(*plugin_launch) (void *);
-	virtual_server_t		*vs;	/* pointer to the checker thread virtualserver */
-	real_server_t			*rs;	/* pointer to the checker thread realserver */
+	bool				(*compare) (void *, void *);
+	virtual_server_t		*vs;			/* pointer to the checker thread virtualserver */
+	real_server_t			*rs;			/* pointer to the checker thread realserver */
 	void				*data;
-	checker_id_t			id;	/* Checker identifier */
-	int				enabled;/* Activation flag */
+	bool				enabled;		/* Activation flag */
+	bool				is_up;			/* Set if checker is up */
+	bool				has_run;		/* Set if the checker has completed at least once */
+	conn_opts_t			*co;			/* connection options */
+	int				alpha;			/* Alpha mode enabled */
+	unsigned long			delay_loop;		/* Interval between running checker */
+	unsigned long			warmup;			/* max random timeout to start checker */
+	unsigned			retry;			/* number of retries before failing */
+	unsigned long			delay_before_retry;	/* interval between retries */
+	unsigned			retry_it;		/* number of successive failures */
+	unsigned			default_retry;		/* number of retries before failing */
+	unsigned long			default_delay_before_retry; /* interval between retries */
+	bool				log_all_failures;	/* Log all failures when checker up */
 } checker_t;
 
 /* Checkers queue */
@@ -45,27 +65,35 @@ extern list checkers_queue;
 
 /* utility macro */
 #define CHECKER_ARG(X) ((X)->data)
+#define CHECKER_CO(X) (((checker_t *)X)->co)
 #define CHECKER_DATA(X) (((checker_t *)X)->data)
-#define CHECKER_GET() (CHECKER_DATA(LIST_TAIL_DATA(checkers_queue)))
-#define CHECKER_VALUE_INT(X) (atoi(vector_slot(X,1)))
+#define CHECKER_GET_CURRENT() (LIST_TAIL_DATA(checkers_queue))
+#define CHECKER_GET() (CHECKER_DATA(CHECKER_GET_CURRENT()))
+#define CHECKER_GET_CO() (((checker_t *)CHECKER_GET_CURRENT())->co)
 #define CHECKER_VALUE_STRING(X) (set_value(X))
-#define CHECKER_VHOST(C) (VHOST((C)->vs))
-#define CHECKER_ENABLED(C) ((C)->enabled)
-#define CHECKER_ENABLE(C)  ((C)->enabled = 1)
-#define CHECKER_DISABLE(C) ((C)->enabled = 0)
 #define CHECKER_HA_SUSPEND(C) ((C)->vs->ha_suspend)
+#define CHECKER_NEW_CO() ((conn_opts_t *) MALLOC(sizeof (conn_opts_t)))
+#define FMT_CHK(C) FMT_RS((C)->rs, (C)->vs)
 
 /* Prototypes definition */
 extern void init_checkers_queue(void);
-extern void queue_checker(void (*free_func) (void *), void (*dump_func) (void *)
+extern void free_vs_checkers(virtual_server_t *);
+extern void dump_connection_opts(FILE *, void *);
+extern void dump_checker_opts(FILE *, void *);
+extern checker_t *queue_checker(void (*free_func) (void *), void (*dump_func) (FILE *, void *)
 			  , int (*launch) (thread_t *)
-			  , void *);
-extern void dump_checkers_queue(void);
+			  , bool (*compare) (void *, void *)
+			  , void *
+			  , conn_opts_t *);
+extern void dequeue_new_checker(void);
+extern bool check_conn_opts(conn_opts_t *);
+extern bool compare_conn_opts(conn_opts_t *, conn_opts_t *) __attribute__ ((pure));
+extern void dump_checkers_queue(FILE *);
 extern void free_checkers_queue(void);
 extern void register_checkers_thread(void);
 extern void install_checkers_keyword(void);
-extern void update_checker_activity(sa_family_t, void *, int);
-extern void checker_set_dst(struct sockaddr_storage *);
 extern void checker_set_dst_port(struct sockaddr_storage *, uint16_t);
+extern void install_checker_common_keywords(bool);
+extern void update_checker_activity(sa_family_t, void *, bool);
 
 #endif
